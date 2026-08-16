@@ -22,7 +22,9 @@ test.before(async () => {
 
 test.after(async () => {
   for (const r of lobby.rooms.values()) r.stopLoop();
-  await new Promise((r) => server.close(r));
+  // server.close() attend la fermeture de chaque connexion : on coupe court
+  for (const c of lobby.connections.values()) { try { c.ws.terminate(); } catch { /* deja mort */ } }
+  await new Promise((r) => { server.close(r); setTimeout(r, 1500); });
 });
 
 /** Petit client de test. */
@@ -235,3 +237,101 @@ test('le circuit de Monaco est bien la et reste degage', async () => {
 });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('un joueur monte dans une monoplace et la conduit', async () => {
+  const host = await new TestClient('Pilote').connect();
+  await host.wait(S2C.WELCOME);
+  host.send({ m: C2S.HELLO, v: PROTOCOL_VERSION, n: 'Cornu', k: 'monaco' });
+  host.send({ m: C2S.CREATE_ROOM, pub: false, name: 'Essais libres' });
+  const room = await host.wait(S2C.ROOM);
+  host.send({ m: C2S.SETTINGS, s: { lobbySize: 2, fillWithBots: true } });
+  await host.wait((m) => m.m === S2C.ROOM && m.r.settings.lobbySize === 2);
+  host.send({ m: C2S.START });
+  await host.wait(S2C.MATCH_START, 12000);
+  await host.wait(S2C.SNAPSHOT, 5000);
+
+  const roomObj = lobby.rooms.get(room.r.code);
+  const match = roomObj.match;
+  const me = match.players.get(host.id);
+
+  // on pose la chèvre au pied d'une monoplace sur la grille de départ
+  // une monoplace bien seule : sur la grille de depart, on tamponnerait celle de devant
+  const cars = [...match.vehicles.values()];
+  const car = cars.find((v) => v.type === 'f1' && !v.occupied
+    && !cars.some((o) => o !== v && Math.hypot(o.x - v.x, o.z - v.z) < 40));
+  assert.ok(car, 'il doit y avoir une monoplace isolee');
+  me.inPlane = false;
+  me.gliding = false;
+  me.x = car.x + 1.5; me.z = car.z; me.y = car.y;
+  me.vx = me.vy = me.vz = 0;
+
+  host.send({ m: C2S.ACTION, a: ACT.ENTER_VEHICLE });
+  await sleep(250);
+  assert.equal(me.vehicleId, car.id, 'la chèvre doit être montée dans la voiture');
+  assert.equal(me.seat, 0, 'elle doit être au volant');
+
+  // plein gaz, tout droit
+  const start = { x: car.x, z: car.z };
+  for (let i = 0; i < 140; i++) {
+    host.send({ m: C2S.INPUT, s: 1000 + i, mx: 0, my: 1, a: car.yaw, b: 0, bt: 0, dt: 10 });
+    await sleep(22);
+  }
+  const dist = Math.hypot(car.x - start.x, car.z - start.z);
+  console.log(`     la monoplace a parcouru ${dist.toFixed(1)} m à ${(car.speed * 3.6).toFixed(0)} km/h`);
+  // la voiture apparait en pleine campagne : arbres et rochers la freinent, on reste large
+  assert.ok(dist > 15, `la voiture doit rouler (${dist.toFixed(1)} m parcourus)`);
+  assert.ok(Math.abs(car.speed) > 3, `elle doit prendre de la vitesse (${car.speed.toFixed(1)} m/s)`);
+  // le pilote suit son véhicule
+  assert.ok(Math.hypot(me.x - car.x, me.z - car.z) < 3, 'le pilote doit rester dans la voiture');
+
+  // et on en ressort
+  host.send({ m: C2S.ACTION, a: ACT.EXIT_VEHICLE });
+  await sleep(250);
+  assert.equal(me.vehicleId, null, 'la chèvre doit pouvoir descendre');
+
+  host.close();
+  roomObj.stopLoop();
+});
+
+test('un coffre s ouvre et libère du butin', async () => {
+  const host = await new TestClient('Fouilleur').connect();
+  await host.wait(S2C.WELCOME);
+  host.send({ m: C2S.HELLO, v: PROTOCOL_VERSION, n: 'Broutille', k: 'or' });
+  host.send({ m: C2S.CREATE_ROOM, pub: false, name: 'Chasse au coffre' });
+  const room = await host.wait(S2C.ROOM);
+  host.send({ m: C2S.SETTINGS, s: { lobbySize: 2, fillWithBots: true } });
+  await host.wait((m) => m.m === S2C.ROOM && m.r.settings.lobbySize === 2);
+  host.send({ m: C2S.START });
+  await host.wait(S2C.MATCH_START, 12000);
+  await host.wait(S2C.SNAPSHOT, 5000);
+
+  const roomObj = lobby.rooms.get(room.r.code);
+  const match = roomObj.match;
+  const me = match.players.get(host.id);
+  const chest = [...match.loot.chests.values()].find((c) => !c.opened);
+  assert.ok(chest, 'il doit y avoir des coffres');
+
+  me.inPlane = false; me.gliding = false;
+  me.x = chest.x + 1; me.z = chest.z; me.y = chest.y;
+  const lootBefore = match.loot.loot.size;
+
+  // maintenir la touche d'interaction ouvre le coffre
+  for (let i = 0; i < 45; i++) {
+    host.send({ m: C2S.INPUT, s: 2000 + i, mx: 0, my: 0, a: 0, b: 0, bt: BTN.USE, dt: 10 });
+    me.x = chest.x + 1; me.z = chest.z; me.y = chest.y; // on reste collé au coffre
+    await sleep(22);
+  }
+  assert.ok(chest.opened, 'le coffre doit s’être ouvert');
+  const gained = match.loot.loot.size - lootBefore;
+  console.log(`     le coffre a libéré ${gained} objets`);
+  assert.ok(gained >= 2, `le coffre doit libérer du butin (${gained})`);
+
+  // et on ramasse
+  host.send({ m: C2S.ACTION, a: ACT.USE });
+  await sleep(250);
+  const hasSomething = me.slots.some(Boolean) || Object.values(me.ammo).some((n) => n > 0);
+  assert.ok(hasSomething, 'la chèvre doit avoir ramassé quelque chose');
+
+  host.close();
+  roomObj.stopLoop();
+});
