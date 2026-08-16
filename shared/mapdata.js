@@ -286,9 +286,13 @@ function pushCyl(list, o) {
  * Un batiment : base au sol, hauteur h. Genere aussi son collider.
  * style : monaco | modern | oldtown | industrial | farm | casino | hotel | pit | grandstand | shed
  */
+let _ownerSeq = 0;
+
 function addBuilding(map, b) {
   const ground = b.y !== undefined ? b.y : terrainHeight(b.x, b.z);
+  const owner = ++_ownerSeq;
   const bld = {
+    _owner: owner,
     x: b.x, z: b.z, y: ground,
     w: b.w, d: b.d, h: b.h,
     yaw: b.yaw || 0,
@@ -305,7 +309,7 @@ function addBuilding(map, b) {
     pushBox(map.colliders, {
       x: b.x, y: ground + b.h / 2, z: b.z,
       hx: b.w / 2, hy: b.h / 2, hz: b.d / 2,
-      yaw: b.yaw || 0, surface: SURFACE.STONE, tag: 'building',
+      yaw: b.yaw || 0, surface: SURFACE.STONE, tag: 'building', owner,
     });
   }
   return bld;
@@ -313,17 +317,52 @@ function addBuilding(map, b) {
 
 function addProp(map, kind, x, z, opts = {}) {
   const y = opts.y !== undefined ? opts.y : terrainHeight(x, z);
-  const p = { kind, x, y, z, yaw: opts.yaw || 0, scale: opts.scale || 1, color: opts.color ?? null, extra: opts.extra || null };
+  const owner = ++_ownerSeq;
+  const p = { _owner: owner, kind, x, y, z, yaw: opts.yaw || 0, scale: opts.scale || 1, color: opts.color ?? null, extra: opts.extra || null };
   map.props.push(p);
   if (opts.collider === 'cyl') {
-    pushCyl(map.colliders, { x, y, z, r: opts.r, h: opts.ch, surface: opts.surface ?? SURFACE.WOOD, tag: kind });
+    pushCyl(map.colliders, { x, y, z, r: opts.r, h: opts.ch, surface: opts.surface ?? SURFACE.WOOD, tag: kind, owner });
   } else if (opts.collider === 'box') {
     pushBox(map.colliders, {
       x, y: y + opts.ch / 2, z, hx: opts.hx, hy: opts.ch / 2, hz: opts.hz,
-      yaw: opts.yaw || 0, surface: opts.surface ?? SURFACE.WOOD, tag: kind,
+      yaw: opts.yaw || 0, surface: opts.surface ?? SURFACE.WOOD, tag: kind, owner,
     });
   }
   return p;
+}
+
+// Elements qui ONT le droit de border la piste.
+const TRACK_SIDE_TAGS = new Set(['rail', 'gantry', 'tunnelwall', 'tunnelroof']);
+
+/**
+ * Filet de securite : rien ne doit obstruer l'asphalte. On teste l'emprise reelle de chaque
+ * collider (coins compris) et on supprime l'objet entier — collider ET rendu — s'il mord
+ * sur la piste. Sans ca, un immeuble genere au hasard peut se poser au milieu de Massenet.
+ */
+function pruneTrackObstructions(map) {
+  const doomed = new Set();
+  for (const c of map.colliders) {
+    if (TRACK_SIDE_TAGS.has(c.tag)) continue;
+    let obstructs = false;
+    if (c.type === 'box') {
+      const ca = Math.cos(c.yaw || 0), sa = Math.sin(c.yaw || 0);
+      for (const [sx, sz] of [[0, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const lx = c.hx * sx, lz = c.hz * sz;
+        const px = c.x + lx * ca + lz * sa;
+        const pz = c.z - lx * sa + lz * ca;
+        if (trackClearance(px, pz, 46) < 1.4) { obstructs = true; break; }
+      }
+    } else {
+      obstructs = trackClearance(c.x, c.z, 46) < c.r + 1.4;
+    }
+    if (obstructs) doomed.add(c.owner ?? -1);
+  }
+  doomed.delete(-1);
+  if (!doomed.size) return 0;
+  map.colliders = map.colliders.filter((c) => !doomed.has(c.owner));
+  map.buildings = map.buildings.filter((b) => !doomed.has(b._owner));
+  map.props = map.props.filter((p) => !doomed.has(p._owner));
+  return doomed.size;
 }
 
 // --- Circuit : rails, tribunes, stands, tunnel ------------------------------
@@ -936,6 +975,7 @@ export function buildMap() {
   buildVillage(map, rng.fork(6));
   buildHeliport(map, rng.fork(7));
   buildNature(map, rng.fork(8));
+  map.pruned = pruneTrackObstructions(map);
   buildLoot(map, rng.fork(9));
   buildVehicles(map, rng.fork(10));
 
@@ -943,7 +983,7 @@ export function buildMap() {
   return map;
 }
 
-export function resetMapCache() { _map = null; _field = null; }
+export function resetMapCache() { _map = null; _field = null; _ownerSeq = 0; }
 
 /**
  * Point de depart valide (sur la terre ferme, hors obstacle grossier).
