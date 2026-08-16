@@ -269,6 +269,7 @@ function pushBox(list, o) {
     surface: o.surface ?? SURFACE.STONE,
     walkable: o.walkable !== false,
     tag: o.tag || '',
+    owner: o.owner ?? null,
   });
 }
 
@@ -279,6 +280,7 @@ function pushCyl(list, o) {
     surface: o.surface ?? SURFACE.WOOD,
     walkable: o.walkable !== false,
     tag: o.tag || '',
+    owner: o.owner ?? null,
   });
 }
 
@@ -341,6 +343,7 @@ const TRACK_SIDE_TAGS = new Set(['rail', 'gantry', 'tunnelwall', 'tunnelroof']);
  */
 function pruneTrackObstructions(map) {
   const doomed = new Set();
+  const orphans = new Set();
   for (const c of map.colliders) {
     if (TRACK_SIDE_TAGS.has(c.tag)) continue;
     let obstructs = false;
@@ -355,14 +358,15 @@ function pruneTrackObstructions(map) {
     } else {
       obstructs = trackClearance(c.x, c.z, 46) < c.r + 1.4;
     }
-    if (obstructs) doomed.add(c.owner ?? -1);
+    if (!obstructs) continue;
+    if (c.owner != null) doomed.add(c.owner);
+    else orphans.add(c); // collider sans objet de rendu associe : on le retire seul
   }
-  doomed.delete(-1);
-  if (!doomed.size) return 0;
-  map.colliders = map.colliders.filter((c) => !doomed.has(c.owner));
+  if (!doomed.size && !orphans.size) return 0;
+  map.colliders = map.colliders.filter((c) => !orphans.has(c) && (c.owner == null || !doomed.has(c.owner)));
   map.buildings = map.buildings.filter((b) => !doomed.has(b._owner));
   map.props = map.props.filter((p) => !doomed.has(p._owner));
-  return doomed.size;
+  return doomed.size + orphans.size;
 }
 
 // --- Circuit : rails, tribunes, stands, tunnel ------------------------------
@@ -672,15 +676,31 @@ function buildHarbour(map, rng) {
 // --- La Piscine : le complexe au bord de l'eau ------------------------------
 
 function buildPool(map) {
-  const px = -37, pz = 62;
+  // On se cale sur la piste : la piscine borde le circuit cote port, elle ne le traverse pas.
+  const anchor = nearestTrackPoint(-37, 62, 120);
+  let px = -37, pz = 62, poolYaw = 0.18;
+  if (anchor.dist !== Infinity) {
+    const side = ((HARBOUR.minZ + HARBOUR.maxZ) / 2 - anchor.z) * anchor.nz
+      + ((HARBOUR.minX + HARBOUR.maxX) / 2 - anchor.x) * anchor.nx >= 0 ? 1 : -1;
+    const off = anchor.width * 0.5 + 24;
+    px = anchor.x + anchor.nx * off * side;
+    pz = anchor.z + anchor.nz * off * side;
+    poolYaw = Math.atan2(anchor.tx, anchor.tz);
+  }
   const y = terrainHeight(px, pz);
   // Bassin (praticable, on peut nager dedans)
-  map.pools.push({ x: px, y: y + 0.2, z: pz, w: 52, d: 26, depth: 2.4, yaw: 0.18 });
-  pushBox(map.colliders, { x: px, y: y + 0.5, z: pz - 15, hx: 28, hy: 0.5, hz: 1.6, yaw: 0.18, surface: SURFACE.STONE, tag: 'pool' });
-  pushBox(map.colliders, { x: px, y: y + 0.5, z: pz + 15, hx: 28, hy: 0.5, hz: 1.6, yaw: 0.18, surface: SURFACE.STONE, tag: 'pool' });
-  // Plongeoirs
-  addBuilding(map, { x: px - 30, z: pz + 6, w: 8, d: 10, h: 11, yaw: 0.18, style: 'modern', color: 0xe6ebf0, name: 'Plongeoir' });
-  addBuilding(map, { x: px + 34, z: pz - 8, w: 20, d: 12, h: 7, yaw: 0.18, style: 'modern', color: 0xdde4ea });
+  const c = Math.cos(poolYaw), sn = Math.sin(poolYaw);
+  const along = (d) => [px + sn * d, pz + c * d];
+  const across = (d) => [px + c * d, pz - sn * d];
+  map.pools.push({ x: px, y: y + 0.2, z: pz, w: 52, d: 26, depth: 2.4, yaw: poolYaw });
+  for (const s2 of [-15, 15]) {
+    const [wx, wz] = across(s2);
+    pushBox(map.colliders, { x: wx, y: y + 0.5, z: wz, hx: 1.6, hy: 0.5, hz: 26, yaw: poolYaw, surface: SURFACE.STONE, tag: 'pool' });
+  }
+  const [dx1, dz1] = along(-30);
+  const [dx2, dz2] = along(34);
+  addBuilding(map, { x: dx1, z: dz1, w: 8, d: 10, h: 11, yaw: poolYaw, style: 'modern', color: 0xe6ebf0, name: 'Plongeoir' });
+  addBuilding(map, { x: dx2, z: dz2, w: 20, d: 12, h: 7, yaw: poolYaw, style: 'modern', color: 0xdde4ea });
 }
 
 // --- L'Alpage : la ferme ----------------------------------------------------
