@@ -4,3 +4,6 @@ npm-debug.log*
 *.log
 dist/
 .env
+
+# captures générées par les tests navigateur
+tests/screenshots/

@@ -23,10 +23,17 @@ Pour jouer à plusieurs sur le même réseau, les autres joueurs ouvrent
 (tunnel, reverse proxy, hébergeur…) : le jeu ne dépend d'aucun service externe.
 
 ```bash
-npm test        # tests d'intégration (serveur + WebSocket + carte)
+npm test        # suite complète : serveur + WebSocket + navigateur réel (Chromium)
 npm run dev     # rechargement à chaud du serveur
-node tests/headless-match.mjs 40 solo   # simule une partie complète de 40 IA, sans navigateur
+node tests/headless-match.mjs 40 solo   # simule une partie de 40 IA, sans navigateur
+node tests/tools/tour.mjs               # captures d'écran guidées du circuit
+node tests/tools/drive2.mjs             # conduit chaque véhicule à travers le réseau
 ```
+
+Les tests ne se contentent pas d'appeler des fonctions : ils lancent le vrai serveur,
+ouvrent le jeu dans **Chromium**, créent un salon, démarrent une partie, sautent de
+l'hélicoptère, marchent au clavier, et vérifient qu'aucune erreur JavaScript n'est apparue.
+Les captures d'écran atterrissent dans `tests/screenshots/`.
 
 ---
 
