@@ -28,8 +28,7 @@ await p.evaluate(() => {
 const spots = [
   ['circuit-ligne-droite', -425, 30, -40, 0.35, -0.28],
   ['circuit-epingle-fairmont', 86, 55, 430, 0.2, -0.5],
-  ['circuit-tunnel', 281, 13.5, 240, 0.02, 0.02],
-  ['circuit-tunnel-vue-large', 240, 40, 180, 0.55, -0.22],
+  ['monte-carlo', -60, 90, 430, 0.05, -0.34],
   ['place-du-casino', -75, 70, 540, 0.0, -0.3],
   ['port-hercule', -120, 60, 120, 0.05, -0.28],
   ['le-rocher-vieille-ville', -620, 110, 60, 0.0, -0.42],

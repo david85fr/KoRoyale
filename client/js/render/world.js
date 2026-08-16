@@ -521,6 +521,15 @@ function terrainColorAt(x, z, y, slope, out) {
     _colB.setHex(C.pierre); out.lerp(_colB, 0.85);
   }
 
+  // Monte-Carlo : entre les immeubles, c'est du pave, pas de la pelouse
+  const city = (1 - smoothstep(230, 330, Math.abs(x + 40)))
+    * (1 - smoothstep(135, 205, Math.abs(z - 520)));
+  if (city > 0.01 && y > 5) {
+    const joint = fbm2(x * 0.09, z * 0.09, 2);
+    _colB.setHex(joint > 0.52 ? C.beton : C.betonSombre);
+    out.lerp(_colB, city * 0.82);
+  }
+
   // neige des sommets
   if (y > 138) { _colB.setHex(C.neige); out.lerp(_colB, smoothstep(146, 168, y)); }
   return out;
