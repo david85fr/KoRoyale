@@ -489,9 +489,9 @@ function chestProto(kind) {
   if (S.chute) {
     // Voilure affalee derriere la caisse.
     const drape = new THREE.Mesh(geoOf('chute', chuteGeo), mCloth());
-    drape.position.set(-0.15, 0.06, -0.85);
-    drape.scale.set(0.62, 0.20, 0.62);
-    drape.rotation.set(0.12, 0.7, 0.22);
+    drape.position.set(-0.15, 0.30, -0.88);
+    drape.scale.set(0.62, 0.22, 0.62);
+    drape.rotation.set(0.10, 0.7, 0.20);
     p.add(drape);
   }
   _protos.set(kind, p);
@@ -836,8 +836,9 @@ export class PickupRenderer {
       const op = !!c.opened;
       if (op && !e.opened) {
         e.opened = true;
-        if (e.born) this._burst(c.x, c.y + 0.55, c.z, CHEST_KINDS[e.kind]?.color ?? 0xffc107);
-        else e.open01 = 1; // deja ouvert a l'apparition : pas de gerbe
+        // Gerbe doree a l'ouverture ; un coffre deja ouvert a l'apparition n'en a pas.
+        if (e.born) this._burst(c.x, c.y + 0.55, c.z, e.kind === 'gold' ? 0xfff1b8 : 0xffd35a);
+        else e.open01 = 1;
       } else if (!op && e.opened) {
         e.opened = false;
       }
@@ -863,11 +864,12 @@ export class PickupRenderer {
   // --- diff du butin -------------------------------------------------------
   syncLoot(list) {
     this._mark(this._loot);
+    let n = 0; // objets retenus ce snapshot (le budget porte sur eux, pas sur les sortants)
     for (let i = 0; list && i < list.length; i++) {
       const l = list[i];
       let e = this._loot.get(l.id);
       if (!e) {
-        if (this._loot.size >= LOOT_MAX) continue; // budget atteint
+        if (n >= LOOT_MAX) continue; // budget atteint
         const d = describeLoot(l);
         e = {
           id: l.id, x: l.x, y: l.y, z: l.z,
@@ -876,6 +878,7 @@ export class PickupRenderer {
         };
         this._loot.set(l.id, e);
       }
+      n++;
       e.keep = true;
       e.x = l.x; e.y = l.y; e.z = l.z;
     }
@@ -1050,7 +1053,8 @@ export class PickupRenderer {
       if (sp.material !== mat) sp.material = mat;
       sp.visible = true;
       sp.position.set(e.x, e.y + 1.12 + bob * 0.5, e.z);
-      const k = 0.30 + Math.sqrt(d2) * 0.024; // taille a l'ecran quasi constante
+      // Echelle proportionnelle a la distance : taille a l'ecran constante.
+      const k = clamp(Math.sqrt(d2) * 0.05, 0.16, 0.75);
       sp.scale.set(k, k, 1);
     }
 

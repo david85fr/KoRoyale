@@ -1402,7 +1402,12 @@ export class LobbyUI {
 
   _pauseFocusables() {
     const sel = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    return [...this.pauseEl.querySelectorAll(sel)].filter((n) => !n.hidden && n.offsetParent !== null);
+    // getClientRects() plutot que offsetParent : l'overlay de pause est en
+    // position fixed, ou offsetParent vaut null meme pour un element visible.
+    return [...this.pauseEl.querySelectorAll(sel)].filter((n) => {
+      if (n.hidden) return false;
+      return typeof n.getClientRects === 'function' ? n.getClientRects().length > 0 : true;
+    });
   }
 
   _pauseKeydown(e) {
@@ -1486,6 +1491,8 @@ export class LobbyUI {
     this.el.dataset.screen = next;
 
     for (const key of Object.keys(this.screens)) setHidden(this.screens[key], key !== next);
+    // on ne quitte jamais une partie en laissant l'overlay de pause ouvert
+    if (next !== 'playing' && this.pauseOpen) this.setPauseMenu(false);
     if (next !== 'room') setHidden(this.countdownEl, true);
     if (next === 'loading' && changed) this._rollTip();
     setHidden(this.el, next === 'playing' && !this.pauseOpen);
