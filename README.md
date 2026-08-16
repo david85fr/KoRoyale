@@ -22,6 +22,22 @@ Pour jouer à plusieurs sur le même réseau, les autres joueurs ouvrent
 `http://<votre-ip-locale>:8080`. Pour inviter des amis à distance, exposez le port
 (tunnel, reverse proxy, hébergeur…) : le jeu ne dépend d'aucun service externe.
 
+### Dans GitHub Codespaces
+
+Le dépôt contient un `.devcontainer` : ouvrez-le dans un Codespace, `npm install` puis
+`npm start` se lancent tout seuls et le port 8080 est redirigé. Cliquez sur le lien proposé
+(ou l'onglet **PORTS**) et le jeu s'ouvre.
+
+Un seul réglage à connaître : par défaut GitHub rend le port **privé**, et vos amis
+tomberaient sur une page de connexion. Dans l'onglet **PORTS**, clic droit sur le port 8080 →
+**Port Visibility** → **Public**. L'adresse `https://…-8080.app.github.dev` devient alors
+partageable telle quelle, et le lien d'invitation du salon fonctionne directement.
+
+Le Codespace ne fait tourner que le *serveur* : le rendu 3D se fait dans le navigateur de
+chaque joueur, donc les performances dépendent de leur machine, pas du Codespace. Bonus :
+comme Codespaces sert le jeu en HTTPS, le verrouillage du pointeur, le presse-papiers et le
+partage natif fonctionnent mieux qu'en `http://` sur le réseau local.
+
 ```bash
 npm test        # suite complète : serveur + WebSocket + navigateur réel (Chromium)
 npm run dev     # rechargement à chaud du serveur

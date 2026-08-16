@@ -1,0 +1,32 @@
+{
+  // Configuration GitHub Codespaces / Dev Containers pour KoRoyale.
+  // Ouvrez le dépôt dans un Codespace : les dépendances s'installent, le serveur se lance,
+  // et le port 8080 est redirigé automatiquement.
+  "name": "KoRoyale",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+
+  "postCreateCommand": "npm install",
+  "postAttachCommand": {
+    "serveur": "npm start"
+  },
+
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "KoRoyale",
+      "onAutoForward": "openPreview",
+      // « public » permet à vos amis d'ouvrir le lien sans compte GitHub.
+      // Si la politique de votre organisation l'interdit, le port reste privé :
+      // passez-le à la main dans l'onglet PORTS (clic droit > Port Visibility > Public).
+      "visibility": "public"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "editor.formatOnSave": false
+      }
+    }
+  }
+}
