@@ -1,6 +1,6 @@
 // Couche reseau du client : WebSocket, reconnexion, mesure de latence.
 
-import { PROTOCOL_VERSION, CLIENT_INPUT_RATE } from '/shared/constants.js';
+import { PROTOCOL_VERSION } from '/shared/constants.js';
 import { C2S, S2C, ACT } from '/shared/protocol.js';
 
 export class Net {
@@ -15,7 +15,6 @@ export class Net {
     this.wantOpen = false;
     this.queue = [];
     this.inputSeq = 0;
-    this.lastInputSent = 0;
     this.id = null;
     this.pingTimer = null;
     this.bytesIn = 0;
@@ -149,10 +148,12 @@ export class Net {
   startMatch() { this.send({ m: C2S.START }); }
   action(a, extra) { this.send({ m: C2S.ACTION, a, ...extra }); }
 
-  /** Envoi d'entree, limite a CLIENT_INPUT_RATE. */
-  sendInput(frame, now) {
-    if (now - this.lastInputSent < 1000 / CLIENT_INPUT_RATE) return false;
-    this.lastInputSent = now;
+  /**
+   * Envoi d'une trame d'entree. Appele une fois par pas de simulation (20 Hz) : c'est
+   * l'appelant qui fixe la cadence, pas nous — sinon deux pas dans la meme image
+   * partageraient le meme numero de sequence et la reconciliation deraillerait.
+   */
+  sendInput(frame) {
     this.inputSeq++;
     this.send({
       m: C2S.INPUT,

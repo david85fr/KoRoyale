@@ -20,7 +20,7 @@
 import * as THREE from 'three';
 import {
   buildMap, terrainHeight, harbourFactor,
-  ISLAND, HARBOUR, ROCHER, MOUNT, BEACH,
+  HARBOUR, ROCHER, MOUNT, BEACH,
 } from '../../../shared/mapdata.js';
 import { trackSamples, startingGrid } from '../../../shared/track.js';
 import { WORLD_HALF, SEA_LEVEL } from '../../../shared/constants.js';
@@ -67,9 +67,7 @@ const C = {
   vertPalme: 0x4a7c46,
   tronc: 0x5a452f,
   eauPiscine: 0x2fb3d9,
-  verre: 0x7fa6bd,
   orange: 0xff9c3a,
-  blanc: 0xf6f6f2,
 };
 
 // ---------------------------------------------------------------------------
@@ -136,9 +134,13 @@ class Mesher {
   constructor() {
     this.p = []; this.u = []; this.c = []; this.i = [];
     this._r = 1; this._g = 1; this._b = 1;
+    this._lu = -1; this._lv = 0;
   }
 
   get empty() { return this.p.length === 0; }
+
+  /** Force toutes les uv suivantes sur un point precis de la texture (-1 = libre). */
+  lockUv(u, v) { this._lu = u; this._lv = v; return this; }
 
   /** Fixe la couleur courante (hex sRGB). */
   col(hex) {
@@ -149,7 +151,8 @@ class Mesher {
 
   vert(x, y, z, u, v) {
     this.p.push(x, y, z);
-    this.u.push(u, v);
+    if (this._lu >= 0) this.u.push(this._lu, this._lv);
+    else this.u.push(u, v);
     this.c.push(this._r, this._g, this._b);
   }
 
@@ -1267,11 +1270,11 @@ const PROP_BUILDERS = {
     m.box(0, 1.18, 0, 2.4, 0.06, 0.7);
   },
   banner(m) {
-    m.col(C.metalSombre);
+    // les poteaux echantillonnent la bande blanche de la texture, le panneau la prend entiere
+    m.col(C.metalSombre).lockUv(0.5, 0.06);
     m.box(-2.0, 1.1, 0, 0.08, 1.1, 0.08);
     m.box(2.0, 1.1, 0, 0.08, 1.1, 0.08);
-    m.col(0xffffff);
-    // panneau texture (uv 0..1 pilotees par la face +Z de la boite)
+    m.col(0xffffff).lockUv(-1, 0);
     m.quad(-2.1, 1.3, 0.06, 2.1, 1.3, 0.06, 2.1, 2.5, 0.06, -2.1, 2.5, 0.06);
     m.quad(2.1, 1.3, -0.06, -2.1, 1.3, -0.06, -2.1, 2.5, -0.06, 2.1, 2.5, -0.06);
   },
@@ -1291,7 +1294,6 @@ function buildProps(map, quality, group) {
     if (!list) { list = []; byKind.set(p.kind, list); }
     list.push(p);
   }
-  const own = [];
   for (const [kind, list] of byKind) {
     const geo = geoOf('prop:' + kind, () => {
       const m = new Mesher();
@@ -1320,7 +1322,6 @@ function buildProps(map, quality, group) {
     inst.receiveShadow = quality === 'high';
     group.add(inst);
   }
-  return own;
 }
 
 // ---------------------------------------------------------------------------
@@ -1629,6 +1630,7 @@ class World {
 
     scene.add(this.group);
     this.setTimeOfDay(this._tod);
+    this.update(0, null, null); // place les nuages avant la premiere image
     console.timeEnd('[world] construction');
     this.buildMs = (typeof performance !== 'undefined' ? performance : Date).now() - t0;
   }
@@ -1694,16 +1696,17 @@ class World {
       this.sea.position.z = Math.round(camera.position.z / cell) * cell;
     }
 
-    // nuages : derive lente, toujours au dessus du joueur
+    // nuages : derive lente, enroules en tore autour de la camera (jamais de bord visible)
     const cx = camera ? camera.position.x : 0;
     const cz = camera ? camera.position.z : 0;
+    const W = 2600, H = W * 0.5;
     for (let i = 0; i < this._cloudSeed.length; i++) {
       const c = this._cloudSeed[i];
       c.x += c.v * dt;
-      if (c.x > cx + 1300) c.x -= 2600;
-      else if (c.x < cx - 1300) c.x += 2600;
+      const x = cx + (((c.x - cx + H) % W) + W) % W - H;
+      const z = cz + (((c.z - cz + H) % W) + W) % W - H;
       _q.identity();
-      _m4.compose(_v.set(c.x, c.y, cz + c.z * 0.5), _q, _s.set(c.s, 1, c.s * 0.5));
+      _m4.compose(_v.set(x, c.y, z), _q, _s.set(c.s, 1, c.s * 0.6));
       this.clouds.setMatrixAt(i, _m4);
     }
     this.clouds.instanceMatrix.needsUpdate = true;

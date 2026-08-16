@@ -445,7 +445,16 @@ export class Player {
       kills: this.kills,
       dmg: Math.round(this.damageDealt),
       dt: this.state === PSTATE.DOWNED ? Math.round(this.health) : 0,
-      vy: Math.round(this.vy * 10) / 10,
+      // etat physique complet : le client en a besoin pour reconcilier sa prediction.
+      // Sans la vitesse, il repart d'une position juste mais d'un elan faux.
+      ph: {
+        vx: Math.round(this.vx * 100) / 100,
+        vy: Math.round(this.vy * 100) / 100,
+        vz: Math.round(this.vz * 100) / 100,
+        g: this.onGround ? 1 : 0,
+        j: this.jumps,
+        c: Math.round((this.coyote || 0) * 100) / 100,
+      },
     };
   }
 

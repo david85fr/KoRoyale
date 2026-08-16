@@ -340,9 +340,17 @@ export class Game {
       return;
     }
 
-    // on repart de l'etat autoritaire...
+    // on repart de l'etat autoritaire (position ET elan : sans la vitesse, rejouer les
+    // entrees repart d'une inertie fausse et la correction oscille)
     const before = { x: L.x, y: L.y, z: L.z };
     L.x = mine.x; L.y = mine.y; L.z = mine.z;
+    const ph = snap.me.ph;
+    if (ph) {
+      L.vx = ph.vx; L.vy = ph.vy; L.vz = ph.vz;
+      L.onGround = ph.g === 1;
+      L.jumps = ph.j;
+      L.coyote = ph.c;
+    }
 
     // ...et on rejoue les entrees que le serveur n'a pas encore traitees
     const acked = snap.sq || 0;
@@ -518,17 +526,54 @@ export class Game {
       moveX: frame.moveX, moveY: frame.moveY,
       yaw: frame.yaw, pitch: frame.pitch, buttons: frame.buttons,
     };
-    this.seq++;
-    this.net.sendInput(frame, performance.now());
+    this.net.sendInput(frame);
     const seq = this.net.inputSeq;
 
     const gliding = this.latest.ip || (me.gl === 1);
-    const inVehicle = !!this.latest.ps.find((p) => p.i === this.myId)?.v;
-    if (me.st === PSTATE.DEAD || gliding || inVehicle) { this.pending.length = 0; return; }
+    const myPs = this.latest.ps.find((p) => p.i === this.myId);
+    if (myPs?.v) { this.tickVehicle(frame, myPs); this.pending.length = 0; return; }
+    this.localVehicle = null;
+    if (me.st === PSTATE.DEAD || gliding) { this.pending.length = 0; return; }
 
     this.pending.push({ seq, cmd: { ...cmd } });
     while (this.pending.length > 60) this.pending.shift();
     stepGoat(this.local, cmd, this.ctx, TICK_DT);
+  }
+
+  /**
+   * Prediction locale du vehicule que l'on pilote. Sans elle, le conducteur voit sa propre
+   * voiture avec 100 ms de retard d'interpolation : injouable a 190 km/h.
+   */
+  tickVehicle(frame, myPs) {
+    const e = this.vehicles.get(myPs.v);
+    if (!e || myPs.vs !== 0) { this.localVehicle = null; return; }
+    const srv = e.snaps[e.snaps.length - 1];
+    if (!srv) return;
+    let V = this.localVehicle;
+    if (!V || V.id !== e.id) {
+      V = this.localVehicle = {
+        id: e.id, type: e.type,
+        x: srv.x, y: srv.y, z: srv.z, yaw: srv.yaw, pitch: srv.pitch, roll: srv.roll,
+        vx: 0, vy: 0, vz: 0, speed: srv.speed, steer: srv.steer,
+        wheelSpin: srv.wheelSpin, grounded: true, health: 1, fuel: 100,
+      };
+    }
+    // correction douce vers l'etat autoritaire (ou recalage brutal si on a trop derive)
+    const err = Math.hypot(V.x - srv.x, V.y - srv.y, V.z - srv.z);
+    if (err > 8) {
+      V.x = srv.x; V.y = srv.y; V.z = srv.z; V.yaw = srv.yaw;
+      V.vx = 0; V.vz = 0; V.speed = srv.speed;
+    } else if (err > 0.05) {
+      const k = 0.14;
+      V.x += (srv.x - V.x) * k; V.y += (srv.y - V.y) * k; V.z += (srv.z - V.z) * k;
+      V.yaw += angleDelta(V.yaw, srv.yaw) * k * 0.8;
+      V.speed += (srv.speed - V.speed) * k;
+    }
+    stepVehicle(V, {
+      throttle: clamp(frame.moveY, -1, 1),
+      steer: clamp(frame.moveX, -1, 1),
+      handbrake: (frame.buttons & BTN.HANDBRAKE) !== 0 || (frame.buttons & BTN.CROUCH) !== 0,
+    }, this.ctx, TICK_DT);
   }
 
   updateRender(dt, now) {
@@ -569,7 +614,15 @@ export class Game {
 
     // --- vehicules ---
     for (const e of this.vehicles.values()) {
-      this.interpolate(e.snaps, renderTime, e.render);
+      if (this.localVehicle && this.localVehicle.id === e.id) {
+        const V = this.localVehicle;
+        e.render.x = V.x; e.render.y = V.y; e.render.z = V.z;
+        e.render.yaw = V.yaw; e.render.pitch = V.pitch; e.render.roll = V.roll;
+        e.render.speed = V.speed; e.render.steer = V.steer; e.render.wheelSpin = V.wheelSpin;
+        e.render.grounded = V.grounded;
+      } else {
+        this.interpolate(e.snaps, renderTime, e.render);
+      }
       e.render.health01 = e.health01 ?? 1;
       e.model.setDamage(e.render.health01);
       e.model.update(e.render, dt);
@@ -608,6 +661,10 @@ export class Game {
     if (spectating) {
       const tgt = this.players.get(spectating);
       if (tgt) { px = tgt.render.x; py = tgt.render.y; pz = tgt.render.z; }
+    }
+    if (px === undefined && this.localVehicle) {
+      const V = this.localVehicle;
+      px = V.x; py = V.y; pz = V.z;
     }
     if (px === undefined) {
       if (this.local) { px = this.local.x + this.posError.x; py = this.local.y + this.posError.y; pz = this.local.z + this.posError.z; }
