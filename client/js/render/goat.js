@@ -256,13 +256,13 @@ function barBackMat() {
 
 /** Petites armes abstraites : [largeur, hauteur, longueur]. */
 const GUN_SHAPES = {
-  pistol: { body: [0.07, 0.10, 0.20], barrel: [0.045, 0.045, 0.14], grip: [0.05, 0.11, 0.06] },
-  smg: { body: [0.08, 0.11, 0.30], barrel: [0.05, 0.05, 0.16], grip: [0.06, 0.13, 0.07] },
-  ar: { body: [0.08, 0.12, 0.42], barrel: [0.05, 0.05, 0.26], grip: [0.06, 0.16, 0.08] },
-  shotgun: { body: [0.09, 0.13, 0.40], barrel: [0.07, 0.07, 0.28], grip: [0.07, 0.12, 0.09] },
-  dmr: { body: [0.07, 0.11, 0.46], barrel: [0.045, 0.045, 0.30], grip: [0.06, 0.14, 0.08] },
-  sniper: { body: [0.07, 0.12, 0.56], barrel: [0.04, 0.04, 0.38], grip: [0.06, 0.14, 0.08] },
-  rpg: { body: [0.12, 0.14, 0.60], barrel: [0.10, 0.10, 0.34], grip: [0.07, 0.12, 0.10] },
+  pistol: { body: [0.06, 0.08, 0.16], barrel: [0.035, 0.035, 0.10], grip: [0.045, 0.09, 0.05] },
+  smg: { body: [0.065, 0.09, 0.23], barrel: [0.04, 0.04, 0.12], grip: [0.05, 0.10, 0.06] },
+  ar: { body: [0.065, 0.10, 0.32], barrel: [0.04, 0.04, 0.20], grip: [0.05, 0.12, 0.07] },
+  shotgun: { body: [0.075, 0.10, 0.30], barrel: [0.055, 0.055, 0.21], grip: [0.06, 0.10, 0.08] },
+  dmr: { body: [0.06, 0.09, 0.35], barrel: [0.035, 0.035, 0.23], grip: [0.05, 0.11, 0.07] },
+  sniper: { body: [0.06, 0.095, 0.42], barrel: [0.03, 0.03, 0.29], grip: [0.05, 0.11, 0.07] },
+  rpg: { body: [0.10, 0.11, 0.46], barrel: [0.08, 0.08, 0.26], grip: [0.06, 0.10, 0.09] },
 };
 
 function skinById(id) {
@@ -435,14 +435,15 @@ class GoatModel {
 
     // arme tenue a la gueule
     this.weapon = new THREE.Group();
-    this.weapon.position.set(0.03, -0.11, 0.30);
-    this.weapon.rotation.y = 0.10;
+    this.weapon.position.set(0.03, -0.125, 0.26);
+    this.weapon.rotation.set(0.06, 0.10, 0.05);
     this.weapon.visible = false;
     this.head.add(this.weapon);
     this._gunBody = new THREE.Mesh(g.box, mat(0x9aa0a6));
     this._gunBarrel = new THREE.Mesh(g.box, mat(STEEL_COLOR));
     this._gunGrip = new THREE.Mesh(g.box, mat(0x3a3a42));
     this.weapon.add(this._gunBody, this._gunBarrel, this._gunGrip);
+    this._shapeWeapon(GUN_SHAPES.pistol); // taille par defaut : la boite unite deborderait
   }
 
   _buildLegs(skin) {
@@ -478,24 +479,24 @@ class GoatModel {
   _buildChute(skin) {
     const g = geo();
     this.chute = new THREE.Group();
-    this.chute.position.y = 1.2;
+    this.chute.position.y = 1.15;
     this.chute.visible = false;
     this.rig.add(this.chute);
 
     this.chuteCanopy = new THREE.Mesh(g.canopy, mat(skin.body, true));
-    this.chuteCanopy.position.y = 1.5;
+    this.chuteCanopy.position.y = 1.25;
     this.chute.add(this.chuteCanopy);
 
     const stripe = new THREE.Mesh(g.canopy, mat(skin.belly, true));
-    stripe.position.y = 1.52;
+    stripe.position.y = 1.27;
     stripe.scale.set(0.45, 0.6, 0.9);
     this.chute.add(stripe);
     this._chuteStripe = stripe;
 
     for (let i = 0; i < 2; i++) {
       const r = new THREE.Mesh(g.riser, mat(0x2e3238));
-      r.position.set((i ? 1 : -1) * 0.42, 0, 0.10);
-      r.rotation.z = (i ? -1 : 1) * 0.48;
+      r.position.set((i ? 1 : -1) * 0.40, 0, 0.10);
+      r.rotation.z = (i ? -1 : 1) * 0.55;
       this.chute.add(r);
     }
   }
@@ -532,18 +533,20 @@ class GoatModel {
     this._applySkin(skin);
   }
 
-  setHeldWeapon(weaponId, rarity) {
-    const def = weaponId ? WEAPONS[weaponId] : null;
-    if (!def || def.kind === 'melee') { this.weapon.visible = false; return; }
-    const s = GUN_SHAPES[weaponId] || GUN_SHAPES.pistol;
-    const color = (RARITY[rarity] || RARITY.common).color;
-    this._gunBody.material = mat(color);
+  _shapeWeapon(s) {
     this._gunBody.scale.set(s.body[0], s.body[1], s.body[2]);
     this._gunBody.position.set(0, 0, s.body[2] * 0.5);
     this._gunBarrel.scale.set(s.barrel[0], s.barrel[1], s.barrel[2]);
     this._gunBarrel.position.set(0, 0.01, s.body[2] + s.barrel[2] * 0.5);
     this._gunGrip.scale.set(s.grip[0], s.grip[1], s.grip[2]);
     this._gunGrip.position.set(0, -s.grip[1] * 0.5 - 0.02, s.grip[2] * 0.5 + 0.02);
+  }
+
+  setHeldWeapon(weaponId, rarity) {
+    const def = weaponId ? WEAPONS[weaponId] : null;
+    if (!def || def.kind === 'melee') { this.weapon.visible = false; return; }
+    this._shapeWeapon(GUN_SHAPES[weaponId] || GUN_SHAPES.pistol);
+    this._gunBody.material = mat((RARITY[rarity] || RARITY.common).color);
     this.weapon.visible = true;
   }
 
@@ -606,6 +609,7 @@ class GoatModel {
     let anim = s.anim | 0;
     if (flags & FLAG.DOWNED) anim = ANIM.DOWNED;
     else if (flags & FLAG.SWIMMING) anim = ANIM.SWIM;
+    else if ((flags & (FLAG.PARACHUTE | FLAG.GLIDING)) && anim !== ANIM.DRIVE) anim = ANIM.GLIDE;
     if (anim !== this._anim) { this._anim = anim; this._animT = 0; } else this._animT += dt;
 
     this.root.position.set(s.x || 0, s.y || 0, s.z || 0);
@@ -674,10 +678,10 @@ class GoatModel {
       case ANIM.HEADBUTT: {
         // plongee de l'encolure sur ~0.25 s
         const k = Math.sin(clamp(this._animT / 0.25, 0, 1) * Math.PI);
-        neckPose = 0.85 * k;
+        neckPose = 0.90 * k;
         headPose = 0.35 * k;
-        bodyPitch = 0.28 * k;
-        bodyY = -0.06 * k;
+        bodyPitch = 0.20 * k;
+        bodyY = -0.02 * k;
         _hipPose[0] = _hipPose[1] = -0.45 * k;
         _hipPose[2] = _hipPose[3] = 0.30 * k;
         earPose = 0.40;
@@ -685,14 +689,15 @@ class GoatModel {
         break;
       }
       case ANIM.DOWNED: {
-        bodyY = -0.62;
-        bodyRoll = 1.45;
+        // couchee sur le flanc, les pattes gigotent dans le vide
+        bodyY = -0.52;
+        bodyRoll = 1.42;
         neckPose = 0.35;
         for (let i = 0; i < 4; i++) {
-          _hipPose[i] = Math.sin(this._t * 4.5 + i * 1.7) * 0.30 + (LEG_FRONT[i] ? -0.2 : 0.2);
-          _kneePose[i] = 0.45 * (LEG_FRONT[i] ? 1 : -1);
+          _hipPose[i] = Math.sin(this._t * 4.5 + i * 1.7) * 0.38 + (LEG_FRONT[i] ? -0.2 : 0.2);
+          _kneePose[i] = (0.45 + Math.sin(this._t * 5.2 + i) * 0.2) * (LEG_FRONT[i] ? 1 : -1);
         }
-        spread = 0.22;
+        spread = 0; // sinon les pattes traversent le sol une fois le corps roule
         earPose = 0.5;
         break;
       }
@@ -714,8 +719,8 @@ class GoatModel {
           _hipPose[i] = Math.sin(p + LEG_PHASE[i]) * 0.60;
           _kneePose[i] = (0.35 + 0.35 * Math.cos(p + LEG_PHASE[i])) * (LEG_FRONT[i] ? 1 : -1);
         }
-        bodyPitch = -0.55;
-        bodyY = 0.05;
+        bodyPitch = -0.45;
+        bodyY = 0.03;
         neckPose = -0.20;
         tailPose = 0.30;
         break;
@@ -736,7 +741,7 @@ class GoatModel {
         break;
       }
       default: { // IDLE
-        bodyY = Math.sin(this._t * 1.7) * 0.013;      // respiration
+        bodyY = (0.5 - 0.5 * Math.cos(this._t * 1.7)) * 0.022; // respiration
         bodyRoll = Math.sin(this._t * 0.8) * 0.012;
         // la chevre broute de temps en temps (phase propre a l'instance)
         this._grazeIn -= dt;
@@ -755,12 +760,12 @@ class GoatModel {
         break;
       }
     }
-    // accroupi : bassin plus bas, pattes pliees
+    // accroupi : bassin plus bas, pattes repliees (les sabots restent au sol)
     const cr = this._crouch;
-    bodyY -= 0.20 * cr;
+    bodyY -= 0.15 * cr;
     for (let i = 0; i < 4; i++) {
-      _hipPose[i] += (LEG_FRONT[i] ? -0.35 : 0.35) * cr;
-      _kneePose[i] += (LEG_FRONT[i] ? 0.7 : -0.7) * cr;
+      _hipPose[i] += (LEG_FRONT[i] ? -0.62 : 0.62) * cr;
+      _kneePose[i] += (LEG_FRONT[i] ? 1.24 : -1.24) * cr;
     }
     // roulis dans les appuis lateraux
     const md = s.moveDir;

@@ -31,6 +31,8 @@ const C = {
   creme: 0xf2e8d5,
   ecume: 0xffffff,
   bidon: 0x4a5a3a,
+  teck: 0x9a7448,
+  coussin: 0xd8cab0,
 };
 
 // Couleurs d'equipe (liseres seulement : on ne repeint pas toute la voiture)
@@ -71,7 +73,6 @@ function matOf(key, make) {
 
 // Temporaires (jamais d'allocation dans les boucles d'update)
 const _v = new THREE.Vector3();
-const _v2 = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
 const _m4 = new THREE.Matrix4();
@@ -134,21 +135,21 @@ function loft(sections, capStart = true, capEnd = true) {
   const tris = (n - 1) * 8 + (capStart ? 2 : 0) + (capEnd ? 2 : 0);
   const pos = new Float32Array(tris * 9);
   let o = 0;
-  const put = (r, c) => {
+  const emit = (r, c) => {
     const k = r * 12 + c * 3;
     pos[o++] = ring[k]; pos[o++] = ring[k + 1]; pos[o++] = ring[k + 2];
   };
   for (let i = 0; i < n - 1; i++) {
     for (let c = 0; c < 4; c++) {
       const d = (c + 1) & 3;
-      put(i, c); put(i, d); put(i + 1, d);
-      put(i, c); put(i + 1, d); put(i + 1, c);
+      emit(i, c); emit(i, d); emit(i + 1, d);
+      emit(i, c); emit(i + 1, d); emit(i + 1, c);
     }
   }
-  if (capStart) { put(0, 0); put(0, 2); put(0, 1); put(0, 0); put(0, 3); put(0, 2); }
+  if (capStart) { emit(0, 0); emit(0, 2); emit(0, 1); emit(0, 0); emit(0, 3); emit(0, 2); }
   if (capEnd) {
     const l = n - 1;
-    put(l, 0); put(l, 1); put(l, 2); put(l, 0); put(l, 2); put(l, 3);
+    emit(l, 0); emit(l, 1); emit(l, 2); emit(l, 0); emit(l, 2); emit(l, 3);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -164,7 +165,7 @@ function wheelGeo(radius, width, seg, tread = 0) {
   const hw = width * 0.5;
   const pos = new Float32Array(seg * 4 * 9);
   let o = 0;
-  const put = (x, y, z) => { pos[o++] = x; pos[o++] = y; pos[o++] = z; };
+  const emit = (x, y, z) => { pos[o++] = x; pos[o++] = y; pos[o++] = z; };
   const ry = new Float32Array(seg), rz = new Float32Array(seg);
   for (let k = 0; k < seg; k++) {
     const a = (k / seg) * TAU;
@@ -175,11 +176,11 @@ function wheelGeo(radius, width, seg, tread = 0) {
   for (let k = 0; k < seg; k++) {
     const j = (k + 1) % seg;
     // flanc
-    put(-hw, ry[k], rz[k]); put(-hw, ry[j], rz[j]); put(hw, ry[j], rz[j]);
-    put(-hw, ry[k], rz[k]); put(hw, ry[j], rz[j]); put(hw, ry[k], rz[k]);
+    emit(-hw, ry[k], rz[k]); emit(-hw, ry[j], rz[j]); emit(hw, ry[j], rz[j]);
+    emit(-hw, ry[k], rz[k]); emit(hw, ry[j], rz[j]); emit(hw, ry[k], rz[k]);
     // bouchon gauche (-X) puis droit (+X)
-    put(-hw, 0, 0); put(-hw, ry[j], rz[j]); put(-hw, ry[k], rz[k]);
-    put(hw, 0, 0); put(hw, ry[k], rz[k]); put(hw, ry[j], rz[j]);
+    emit(-hw, 0, 0); emit(-hw, ry[j], rz[j]); emit(-hw, ry[k], rz[k]);
+    emit(hw, 0, 0); emit(hw, ry[k], rz[k]); emit(hw, ry[j], rz[j]);
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -257,20 +258,21 @@ function smokeTex() {
   return finishTex(g, key);
 }
 
-/** Moustache d'ecume : bande blanche qui s'estompe vers l'exterieur. */
+/**
+ * Moustache d'ecume : coin blanc, dense et fin a la proue (v = 0),
+ * large et estompe vers l'arriere (v = 1).
+ */
 function foamTex() {
   const key = 'foam';
   if (_texs.has(key)) return _texs.get(key);
   const g = ctx2d(64, 64);
   if (!g) { _texs.set(key, null); return null; }
   g.clearRect(0, 0, 64, 64);
-  const grd = g.createLinearGradient(0, 0, 0, 64);
-  grd.addColorStop(0, 'rgba(255,255,255,0.9)');
-  grd.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = grd;
+  g.fillStyle = '#ffffff';
   for (let i = 0; i < 64; i++) {
-    const w = 64 - i;
-    g.globalAlpha = 1 - i / 70;
+    const t = i / 63;               // 0 = arriere du sillage, 1 = proue
+    const w = 4 + 58 * (1 - t);
+    g.globalAlpha = 0.12 + t * 0.88;
     g.fillRect(32 - w * 0.5, i, w, 1);
   }
   g.globalAlpha = 1;
@@ -327,8 +329,7 @@ function addWheels(root, id, cfg, widthFront, widthRear, seg, tread) {
   root.add(g);
   const gf = geoOf(`${id}.tireF`, () => wheelGeo(cfg.radius, widthFront, seg, tread));
   const gr = geoOf(`${id}.tireR`, () => wheelGeo(cfg.radius, widthRear, seg, tread));
-  const hf = geoOf(`${id}.hubF`, () => hubGeo(cfg.radius * 0.46, seg));
-  const hr = geoOf(`${id}.hubR`, () => hubGeo(cfg.radius * 0.46, seg));
+  const gh = geoOf(`${id}.hub`, () => hubGeo(cfg.radius * 0.46, seg));
   const mTire = mFlat(C.pneu);
   const mHub = mFlat(C.jante);
   let idx = 0;
@@ -347,7 +348,7 @@ function addWheels(root, id, cfg, widthFront, widthRear, seg, tread) {
       const spin = new THREE.Group();
       const tire = new THREE.Mesh(front ? gf : gr, mTire);
       spin.add(tire);
-      const hub = new THREE.Mesh(front ? hf : hr, mHub);
+      const hub = new THREE.Mesh(gh, mHub);
       const hw = (front ? widthFront : widthRear) * 0.5 + 0.012;
       hub.position.x = single ? hw : sx * hw;
       if (single || sx > 0) hub.rotation.y = 0; else hub.rotation.y = Math.PI;
@@ -405,16 +406,23 @@ function buildF1() {
   intake.position.set(0, 0.86, -0.53);
   intake.scale.set(1, 1.4, 1);
 
-  // Pontons + ouverture de cockpit + carenage moteur.
+  // Pontons lateraux (livree) puis bras de suspension et baignoire (sombre).
   put(ch, geoOf('f1.pods', () => boxSoup([
     B(-0.58, 0.32, -0.30, 0.20, 0.20, 0.72),
     B(0.58, 0.32, -0.30, 0.20, 0.20, 0.72),
+  ])), mPaint(T.color), null, true);
+  put(ch, geoOf('f1.susp', () => boxSoup([
     B(0, 0.66, -0.10, 0.24, 0.05, 0.46),          // baignoire du pilote
     B(0, 0.30, 1.75, 0.30, 0.02, 0.05),           // triangulation avant
     B(-0.60, 0.30, 1.75, 0.31, 0.02, 0.05, 0, 0, 0.12),
     B(0.60, 0.30, 1.75, 0.31, 0.02, 0.05, 0, 0, -0.12),
-    B(-0.58, 0.34, -1.70, 0.30, 0.02, 0.05, 0, 0, 0.10),
-    B(0.58, 0.34, -1.70, 0.30, 0.02, 0.05, 0, 0, -0.10),
+    B(-0.60, 0.34, -1.70, 0.36, 0.02, 0.05, 0, 0, 0.10),
+    B(0.60, 0.34, -1.70, 0.36, 0.02, 0.05, 0, 0, -0.10),
+  ])), mFlat(C.sombre));
+  // Bouches d'air des pontons.
+  put(ch, geoOf('f1.podIntakes', () => boxSoup([
+    B(-0.58, 0.34, 0.41, 0.15, 0.14, 0.02),
+    B(0.58, 0.34, 0.41, 0.15, 0.14, 0.02),
   ])), mFlat(C.sombre));
 
   // Aileron avant large, deux plans + derives.
@@ -587,7 +595,6 @@ function buildScooter() {
   ])), mPaint(T.color), null, true);
 
   put(ch, geoOf('scooter.trim', () => boxSoup([
-    B(0, 0.62, 0.62, 0.11, 0.03, 0.16, -0.30, 0, 0), // garde-boue avant
     B(0, 0.66, -1.02, 0.13, 0.03, 0.16, 0.22, 0, 0), // garde-boue arriere
   ])), mFlat(C.chrome)).userData.accent = true;
 
@@ -597,30 +604,44 @@ function buildScooter() {
     B(0, 0.81, -0.72, 0.14, 0.06, 0.22, -0.10, 0, 0),
   ])), mFlat(C.sombre));
 
+  // Train avant : tout pivote autour de la colonne de direction (z = PIV).
+  const PIV = 0.52;
+  const front = new THREE.Group();
+  front.position.z = PIV;
+  front.userData.role = 'steerFront';
+  ch.add(front);
+  const onFork = (m) => { m.position.z = -PIV; return m; };
+
+  onFork(put(front, geoOf('scooter.mudguard', () => boxSoup([
+    B(0, 0.62, 0.62, 0.11, 0.03, 0.16, -0.30, 0, 0),
+  ])), mFlat(C.chrome)));
+
   // Colonne, fourche et guidon.
-  put(ch, geoOf('scooter.fork', () => boxSoup([
+  onFork(put(front, geoOf('scooter.fork', () => boxSoup([
     B(0, 0.78, 0.52, 0.03, 0.26, 0.03, 0.30, 0, 0),
     B(-0.10, 0.50, 0.66, 0.02, 0.20, 0.02, 0.30, 0, 0),
     B(0.10, 0.50, 0.66, 0.02, 0.20, 0.02, 0.30, 0, 0),
     B(0, 1.02, 0.42, 0.30, 0.02, 0.02),
     B(-0.28, 1.02, 0.42, 0.06, 0.03, 0.03),
     B(0.28, 1.02, 0.42, 0.06, 0.03, 0.03),
-    B(-0.24, 1.14, 0.40, 0.02, 0.06, 0.02, 0, 0, -0.3),  // retroviseurs
-    B(0.24, 1.14, 0.40, 0.02, 0.06, 0.02, 0, 0, 0.3),
-  ])), mFlat(C.sombre));
+    B(-0.25, 1.09, 0.42, 0.015, 0.08, 0.015, 0, 0, -0.22), // tiges de retroviseur
+    B(0.25, 1.09, 0.42, 0.015, 0.08, 0.015, 0, 0, 0.22),
+    B(-0.29, 1.18, 0.42, 0.055, 0.04, 0.012),              // miroirs
+    B(0.29, 1.18, 0.42, 0.055, 0.04, 0.012),
+  ])), mFlat(C.sombre)));
 
   // Phare rond.
-  put(ch, geoOf('scooter.lampBody', () => {
+  onFork(put(front, geoOf('scooter.lampBody', () => {
     const g = new THREE.CylinderGeometry(0.12, 0.12, 0.07, 8);
     g.rotateX(Math.PI / 2);
     g.translate(0, 0.85, 0.47);
     return g;
-  }), mFlat(C.chrome));
-  const lamp = put(ch, geoOf('scooter.lampGlass', () => {
+  }), mFlat(C.chrome)));
+  const lamp = onFork(put(front, geoOf('scooter.lampGlass', () => {
     const g = new THREE.CircleGeometry(0.1, 8);
     g.translate(0, 0.85, 0.512);
     return g;
-  }), mGlow(C.phare), 'light');
+  }), mGlow(C.phare), 'light'));
   lamp.visible = false;
 
   const brake = put(ch, planeGeo(0.16, 0.07), mGlow(C.feu), 'brake');
@@ -655,17 +676,19 @@ function buildBoat() {
   ])), mPaint(T.color), 'hull', true);
   hull.name = 'hull';
 
-  // Cockpit creuse + liston de protection.
-  put(ch, geoOf('boat.deck', () => boxSoup([
-    B(0, 0.60, -1.05, 0.86, 0.05, 1.45),           // plat-bord interieur
+  // Plancher de cockpit en teck (tres Riva) + liston de protection.
+  put(ch, geoOf('boat.sole', () => boxSoup([
+    B(0, 0.62, -1.05, 0.84, 0.03, 1.42),
+  ])), mFlat(C.teck));
+  put(ch, geoOf('boat.rail', () => boxSoup([
     B(-1.14, 0.52, -0.60, 0.06, 0.07, 1.90),
     B(1.14, 0.52, -0.60, 0.06, 0.07, 1.90),
   ])), mFlat(C.sombre));
 
   // Console de pilotage + cadre de pare-brise.
   put(ch, geoOf('boat.console', () => boxSoup([
-    B(0, 0.80, 0.55, 0.52, 0.20, 0.30),
-    B(0, 1.02, 0.42, 0.54, 0.03, 0.03, -0.45, 0, 0),
+    B(0, 0.80, 0.55, 0.42, 0.20, 0.30),
+    B(0, 1.02, 0.42, 0.50, 0.03, 0.03, -0.45, 0, 0),
   ])), mFlat(C.creme)).userData.accent = true;
 
   // Pare-brise incline.
@@ -673,12 +696,14 @@ function buildBoat() {
   glass.position.set(0, 1.04, 0.34);
   glass.rotation.x = -0.45;
 
-  // Banquette + deux baquets avant.
+  // Banquette arriere + siege pilote + deux coussins de plat-bord.
   put(ch, geoOf('boat.seats', () => boxSoup([
     B(0, 0.86, -1.60, 0.72, 0.07, 0.24),
     B(0, 1.08, -1.86, 0.72, 0.18, 0.06, 0.16, 0, 0),
     B(0, 0.86, -0.45, 0.34, 0.07, 0.24),
-  ])), mFlat(C.siege));
+    B(-0.62, 0.68, 0.60, 0.20, 0.06, 0.26),
+    B(0.62, 0.68, 0.60, 0.20, 0.06, 0.26),
+  ])), mFlat(C.coussin));
 
   // Moteur hors-bord.
   put(ch, geoOf('boat.engine', () => boxSoup([
@@ -709,9 +734,9 @@ function buildBoat() {
 
   // Moustaches d'ecume : deux plans additifs poses sur l'eau.
   const foamGeo = geoOf('boat.foam', () => {
-    const g = new THREE.PlaneGeometry(1.5, 3.2);
+    const g = new THREE.PlaneGeometry(1.0, 2.6);
     g.rotateX(-Math.PI / 2);
-    g.translate(0, 0, -0.9);
+    g.translate(0, 0, -0.6);
     return g;
   });
   for (let i = 0; i < 2; i++) {
@@ -720,8 +745,8 @@ function buildBoat() {
       map: foamTex() || null, color: C.ecume, transparent: true, opacity: 0.6,
       blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
     })), 'foam');
-    f.position.set(s * 0.55, 0.04, 1.7);
-    f.rotation.y = s * 0.34;
+    f.position.set(s * 0.70, 0.04, 1.65);
+    f.rotation.y = s * 0.30;
     f.visible = false;
   }
 
@@ -800,6 +825,7 @@ class VehicleModel {
     this._paint = [];
     this._accent = [];
     this._hull = null;
+    this._steerFront = null;
     this.chassis = null;
     this.root.traverse((o) => {
       const u = o.userData;
@@ -814,6 +840,7 @@ class VehicleModel {
         case 'brake': this._brakes.push(o); break;
         case 'foam': this._foam.push(o); break;
         case 'wheel': this._wheels.push(o); break;
+        case 'steerFront': this._steerFront = o; break;
         default: break;
       }
     });
@@ -1050,6 +1077,8 @@ class VehicleModel {
       u.spin.rotation.x = spin;
       if (u.front) u.steer.rotation.y = steerAngle;
     }
+    // Guidon / fourche du scooter.
+    if (this._steerFront) this._steerFront.rotation.y = steerAngle;
   }
 
   _updateBoat(s, dt, sp, absSp, speedRatio) {
