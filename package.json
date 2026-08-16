@@ -1,0 +1,19 @@
+{
+  "name": "koroyale",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KoRoyale — battle royale de chevres avec le circuit de Monaco",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test tests/"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "express": "^4.19.2",
+    "three": "^0.169.0",
+    "ws": "^8.18.0"
+  }
+}
