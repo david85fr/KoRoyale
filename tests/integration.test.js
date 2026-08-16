@@ -272,15 +272,18 @@ test('un joueur monte dans une monoplace et la conduit', async () => {
 
   // plein gaz, tout droit
   const start = { x: car.x, z: car.z };
+  let peak = 0;
   for (let i = 0; i < 140; i++) {
     host.send({ m: C2S.INPUT, s: 1000 + i, mx: 0, my: 1, a: car.yaw, b: 0, bt: 0, dt: 10 });
     await sleep(22);
+    peak = Math.max(peak, Math.abs(car.speed));
   }
   const dist = Math.hypot(car.x - start.x, car.z - start.z);
-  console.log(`     la monoplace a parcouru ${dist.toFixed(1)} m à ${(car.speed * 3.6).toFixed(0)} km/h`);
-  // la voiture apparait en pleine campagne : arbres et rochers la freinent, on reste large
+  console.log(`     la monoplace a parcouru ${dist.toFixed(1)} m, pointe ${(peak * 3.6).toFixed(0)} km/h`);
+  // la voiture apparait en pleine campagne : arbres et rochers la freinent, et elle peut
+  // finir arretee contre un obstacle — c'est la vitesse de pointe qui prouve qu'elle roule
   assert.ok(dist > 15, `la voiture doit rouler (${dist.toFixed(1)} m parcourus)`);
-  assert.ok(Math.abs(car.speed) > 3, `elle doit prendre de la vitesse (${car.speed.toFixed(1)} m/s)`);
+  assert.ok(peak > 6, `elle doit prendre de la vitesse (pointe ${peak.toFixed(1)} m/s)`);
   // le pilote suit son véhicule
   assert.ok(Math.hypot(me.x - car.x, me.z - car.z) < 3, 'le pilote doit rester dans la voiture');
 

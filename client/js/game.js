@@ -613,6 +613,9 @@ export class Game {
     }
 
     // --- vehicules ---
+    const heard = this._heardEngines || (this._heardEngines = new Set());
+    const stillHeard = this._stillHeard || (this._stillHeard = new Set());
+    stillHeard.clear();
     for (const e of this.vehicles.values()) {
       if (this.localVehicle && this.localVehicle.id === e.id) {
         const V = this.localVehicle;
@@ -626,6 +629,17 @@ export class Game {
       e.render.health01 = e.health01 ?? 1;
       e.model.setDamage(e.render.health01);
       e.model.update(e.render, dt);
+      // moteur audible seulement s'il est occupe et pas trop loin
+      const occupied = (e.seats || []).some((s) => s);
+      const d2 = (e.render.x - (this.local?.x ?? 0)) ** 2 + (e.render.z - (this.local?.z ?? 0)) ** 2;
+      if (occupied && !e.destroyed && d2 < 120 * 120) {
+        stillHeard.add(e.id);
+        heard.add(e.id);
+        this.audio?.engine(e.id, true, { speed: Math.abs(e.render.speed), type: e.type });
+      }
+    }
+    for (const id of heard) {
+      if (!stillHeard.has(id)) { this.audio?.engine(id, false); heard.delete(id); }
     }
 
     // --- camera ---

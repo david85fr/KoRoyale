@@ -46,6 +46,14 @@ class App {
       maxLobby: MATCH.maxLobbySize,
     });
 
+    // le HUD signale les clics sur les emplacements et sur la grande carte
+    this.hudRoot.addEventListener('hud:slot', (e) => {
+      this.net.action(ACT.SLOT, { slot: e.detail.slot });
+    });
+    this.hudRoot.addEventListener('hud:mark', (e) => {
+      this.net.action(ACT.MARK, { x: e.detail.x, z: e.detail.z });
+    });
+
     this.wireNet();
     this.net.connect();
     this.setScreen('connecting');
