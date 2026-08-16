@@ -172,10 +172,17 @@ body[data-screen="playing"] .lobby > *:not(.lobby__pause):not(.lobby__toast):not
 .screen, .lobby__screen {
   max-width: 1180px;
   margin: 0 auto;
-  animation: apparait 0.24s ease both;
+  opacity: 1;
+  /* Surtout pas de fill-mode « both » ici : l'ecran est masque au chargement, l'animation
+     ne demarre donc jamais et l'element resterait bloque a opacity 0. */
+  animation: apparait 0.24s ease;
 }
 
-@keyframes apparait { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* L'apparition ne touche JAMAIS a l'opacite : un ecran dont la visibilite depend d'une
+   animation finit tot ou tard invisible (animation relancee, mouvement reduit, onglet
+   en arriere-plan...). On ne bouge que la position. */
+@keyframes apparait { from { transform: translateY(8px); } to { transform: none; } }
+@keyframes fondu { from { opacity: 0; } to { opacity: 1; } }
 
 /* --- logo --- */
 .lobby__logo { text-align: center; margin: clamp(8px, 3vh, 34px) 0 clamp(10px, 2vh, 22px); }
@@ -425,7 +432,7 @@ body[data-screen="playing"] .lobby > *:not(.lobby__pause):not(.lobby__toast):not
   max-width: min(92vw, 560px);
   box-shadow: var(--ombre);
   z-index: 70;
-  animation: apparait 0.2s ease both;
+  animation: fondu 0.2s ease, apparait 0.2s ease;
 }
 .lobby__toast--error { border-left-color: var(--danger); }
 .lobby__toast-text { flex: 1; }
@@ -641,7 +648,13 @@ body[data-screen="playing"] .lobby > *:not(.lobby__pause):not(.lobby__toast):not
 .room__chat-text { color: var(--texte); }
 .room__chat-form { display: grid; grid-template-columns: 1fr auto; gap: 0.4rem; }
 
-.room__footer { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; margin-top: var(--gap); }
+.room__footer {
+  display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center;
+  margin-top: var(--gap);
+  position: sticky; bottom: 0; z-index: 5;
+  padding: 0.7rem 0 calc(var(--safe-b) + 0.4rem);
+  background: linear-gradient(180deg, rgba(11, 21, 36, 0), rgba(11, 21, 36, 0.94) 45%);
+}
 .room__ready--on, .room__ready[aria-pressed="true"] {
   background: linear-gradient(180deg, #56e08c, #2fa860);
   border-color: rgba(255, 255, 255, 0.3);
@@ -883,7 +896,7 @@ body[data-screen="playing"] .lobby > *:not(.lobby__pause):not(.lobby__toast):not
   background: rgba(6, 13, 23, 0.66);
   border-right: 3px solid var(--bord);
   font-size: 0.8rem;
-  animation: apparait 0.2s ease both;
+  animation: fondu 0.2s ease;
   max-width: min(60vw, 420px);
 }
 .hud__kf--mine { border-right-color: var(--or); background: rgba(255, 193, 7, 0.16); }

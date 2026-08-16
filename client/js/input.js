@@ -300,7 +300,12 @@ export class InputManager {
   requestPointerLock() {
     if (!this.canvas || this.isTouch || this._locked) return;
     if (typeof this.canvas.requestPointerLock !== 'function') return;
-    try { this.canvas.requestPointerLock(); } catch { /* refus du navigateur */ }
+    try {
+      // Chrome renvoie desormais une promesse : sans .catch(), un refus (verrouillage
+      // demande hors geste utilisateur) remonte en erreur non capturee dans la console.
+      const r = this.canvas.requestPointerLock();
+      if (r && typeof r.catch === 'function') r.catch(() => {});
+    } catch { /* refus du navigateur */ }
   }
 
   exitPointerLock() {

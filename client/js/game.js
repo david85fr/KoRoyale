@@ -724,7 +724,10 @@ export class Game {
     this.camera.position.x = damp(this.camera.position.x, cx, smooth, dt);
     this.camera.position.y = damp(this.camera.position.y, cy, smooth, dt);
     this.camera.position.z = damp(this.camera.position.z, cz, smooth, dt);
-    _e.set(pitch, yaw, 0, 'YXZ');
+    // Une camera three.js regarde vers son -Z local, alors que notre yaw pointe vers +Z
+    // (dirFromYawPitch). Sans le demi-tour, la camera regarde exactement a l'oppose du
+    // joueur : on ne voit jamais sa propre chevre et la vue est inversee.
+    _e.set(pitch, yaw + Math.PI, 0, 'YXZ');
     this.camera.quaternion.setFromEuler(_e);
   }
 
@@ -862,7 +865,7 @@ export class Game {
         health: veh.health01, fuel: veh.fuel,
         seat: myPs.vs, seats: veh.seats || [],
       } : null,
-      flight: snap.ph === 'flight' ? {
+      flight: snap.ph === 'flight' && me.gl === 1 ? {
         inPlane: snap.ip === 1, t: snap.ft,
         from: snap.fp ? { x: snap.fp.fx, z: snap.fp.fz } : null,
         to: snap.fp ? { x: snap.fp.tx, z: snap.fp.tz } : null,
