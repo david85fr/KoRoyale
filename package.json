@@ -10,7 +10,7 @@
     "dev": "node --watch server/index.js",
     "test": "node --test tests/integration.test.js tests/browser.test.js",
     "serve:watch": "node scripts/watch-and-serve.mjs",
-    "codespace": "node scripts/watch-and-serve.mjs"
+    "codespace": "bash scripts/codespace-start.sh"
   },
   "engines": {
     "node": ">=20"

@@ -19,6 +19,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import os from 'node:os';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const POLL_MS = Number(process.env.KOROYALE_POLL_MS) || 30_000;
@@ -28,6 +29,8 @@ const PULL = process.env.KOROYALE_NO_PULL !== '1';
 const PORTS = process.env.KOROYALE_NO_PORT !== '1';
 const PORT_REASSERT_MS = 120_000;
 
+const PIDFILE = process.env.KOROYALE_PIDFILE || path.join(os.tmpdir(), 'koroyale-supervisor.pid');
+
 let child = null;
 let stopping = false;
 let restarting = false;
@@ -35,6 +38,33 @@ let lastPortAssert = 0;
 let consecutiveCrashes = 0;
 
 const log = (...a) => console.log(`[superviseur ${new Date().toLocaleTimeString('fr-FR')}]`, ...a);
+
+/**
+ * Un seul superviseur a la fois : postStartCommand est rejoue a chaque reveil du
+ * Codespace, et deux superviseurs se disputeraient le meme port.
+ */
+function claimSingleton() {
+  try {
+    const prev = Number(fs.readFileSync(PIDFILE, 'utf8').trim());
+    if (prev && prev !== process.pid) {
+      process.kill(prev, 0); // leve si le processus n'existe plus
+      log(`un superviseur tourne déjà (pid ${prev}) — on ne relance pas`);
+      return false;
+    }
+  } catch { /* pas de verrou, ou processus mort : on prend la place */ }
+  try {
+    fs.writeFileSync(PIDFILE, String(process.pid));
+    process.on('exit', () => { try { fs.unlinkSync(PIDFILE); } catch { /* deja retire */ } });
+  } catch { /* /tmp non inscriptible : on continue quand meme */ }
+  return true;
+}
+
+/** Adresse publique du Codespace, si on y est. */
+function publicUrl() {
+  const name = process.env.CODESPACE_NAME;
+  const domain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+  return name && domain ? `https://${name}-${PORT}.${domain}` : `http://localhost:${PORT}`;
+}
 
 function git(args, opts = {}) {
   const r = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8', ...opts });
@@ -163,24 +193,30 @@ function assertPortPublic(force = false) {
   const msg = ((r.stderr || '') + (r.stdout || '')).trim().split('\n')[0];
   if (!assertPortPublic._warned) {
     assertPortPublic._warned = true;
-    log(`impossible de forcer la visibilité du port via gh (${msg || 'commande indisponible'}).`);
-    log('Le devcontainer demande déjà "visibility": "public" ; sinon onglet PORTS → '
-      + `clic droit sur ${PORT} → Port Visibility → Public.`);
+    const scope = /scope|auth|token/i.test(msg);
+    log(`gh n'a pas pu forcer la visibilité du port : ${msg || 'commande indisponible'}`);
+    if (scope) {
+      log("  → le jeton du Codespace n'a pas le scope « codespace ». C'est sans gravité :");
+      log('    .devcontainer/devcontainer.json demande déjà "visibility": "public".');
+      log(`    Pour le forcer : gh auth login -s codespace, puis gh codespace ports visibility ${PORT}:public`);
+    }
+    log(`  → vérification manuelle : onglet PORTS, clic droit sur ${PORT}, Port Visibility → Public.`);
   }
 }
 
 // ---------------------------------------------------------------------------
 
 function banner() {
-  const name = process.env.CODESPACE_NAME;
-  const domain = process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN;
+  const url = publicUrl();
   log('KoRoyale — superviseur');
-  log(`branche suivie : ${BRANCH} | scrutation : ${POLL_MS / 1000} s`);
-  if (name && domain) log(`adresse publique : https://${name}-${PORT}.${domain}`);
-  else log(`adresse locale : http://localhost:${PORT}`);
+  log(`branche suivie : ${BRANCH} | scrutation : ${POLL_MS / 1000} s | commit ${git(['rev-parse', '--short', 'HEAD']).out}`);
+  log(`adresse : ${url}`);
+  try { fs.writeFileSync(path.join(os.tmpdir(), 'koroyale-url.txt'), url + '\n'); }
+  catch { /* peu importe */ }
 }
 
 async function main() {
+  if (!claimSingleton()) return;
   banner();
   assertPortPublic(true);
   startServer();

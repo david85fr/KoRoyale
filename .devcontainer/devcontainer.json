@@ -16,7 +16,7 @@
 
   // postStartCommand est rejoué à chaque démarrage du Codespace (création, réveil, rebuild).
   // On détache le superviseur : la commande doit rendre la main immédiatement.
-  "postStartCommand": "nohup npm run serve:watch > /tmp/koroyale.log 2>&1 & echo 'KoRoyale lancé — journal : /tmp/koroyale.log'",
+  "postStartCommand": "bash scripts/codespace-start.sh",
 
   "forwardPorts": [8080],
   "portsAttributes": {

@@ -24,34 +24,40 @@ Pour jouer à plusieurs sur le même réseau, les autres joueurs ouvrent
 
 ### Dans GitHub Codespaces (serveur permanent, mis à jour tout seul)
 
-Ouvrez le dépôt dans un Codespace : **il n'y a rien à taper**. Le `.devcontainer` fait tout :
+**Code → Codespaces → Create codespace.** Il n'y a rien à taper : `.devcontainer` enchaîne
+tout seul l'installation, le lancement, l'ouverture du port et la mise à jour continue.
 
-1. `npm install` à la création ;
-2. le serveur démarre à chaque démarrage du Codespace ;
-3. le port 8080 est redirigé et rendu **public** — l'adresse
-   `https://<codespace>-8080.app.github.dev` se partage telle quelle ;
+1. `npm install` à la création du Codespace ;
+2. `scripts/codespace-start.sh` démarre le jeu à **chaque** démarrage du Codespace
+   (création, réveil, rebuild) et affiche l'adresse à partager ;
+3. le port 8080 est redirigé et déclaré **public** — l'adresse
+   `https://<codespace>-8080.app.github.dev` s'envoie telle quelle à vos amis ;
 4. un superviseur interroge GitHub **toutes les 30 secondes** : dès qu'un commit arrive sur
-   la branche suivie, il le récupère, relance `npm install` si les dépendances ont changé,
+   la branche suivie, il le récupère, relance `npm install` si les dépendances ont bougé,
    et redémarre le serveur.
 
 Vous poussez un commit depuis votre machine, et une demi-minute plus tard la partie tourne
 avec le nouveau code, sans toucher au Codespace.
 
-Le journal du superviseur est dans `/tmp/koroyale.log` :
-
 ```bash
-tail -f /tmp/koroyale.log
+tail -f /tmp/koroyale.log     # le journal du superviseur
+cat /tmp/koroyale-url.txt     # l'adresse publique, si vous l'avez perdue
 ```
 
-Le superviseur relance aussi le serveur s'il tombe (attente progressive : 2 s, 4 s, 8 s…),
-et **refuse de se mettre à jour** si vous avez des modifications non commitées sur des
-fichiers suivis — votre travail en cours n'est jamais écrasé. Les fichiers non suivis, eux,
-ne bloquent rien.
+Trois garde-fous, tous vérifiés par des tests :
 
-Pour le piloter à la main :
+- le serveur est **relancé s'il tombe**, avec une attente progressive (2 s, 4 s, 8 s…) ;
+- un **verrou** empêche deux superviseurs de se disputer le port quand le Codespace se
+  réveille plusieurs fois ;
+- la mise à jour est **refusée** si vous avez des modifications non commitées sur des fichiers
+  suivis : votre travail en cours n'est jamais écrasé (les fichiers non suivis, eux, ne
+  bloquent rien).
+
+Pour piloter à la main :
 
 ```bash
-npm run serve:watch      # le superviseur complet (ce que lance le Codespace)
+npm run codespace        # le lanceur détaché (ce que fait le Codespace)
+npm run serve:watch      # le superviseur au premier plan, pour voir ce qu'il fait
 npm start                # juste le serveur, sans mise à jour automatique
 ```
 
