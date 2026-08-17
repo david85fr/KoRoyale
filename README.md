@@ -22,16 +22,48 @@ Pour jouer à plusieurs sur le même réseau, les autres joueurs ouvrent
 `http://<votre-ip-locale>:8080`. Pour inviter des amis à distance, exposez le port
 (tunnel, reverse proxy, hébergeur…) : le jeu ne dépend d'aucun service externe.
 
-### Dans GitHub Codespaces
+### Dans GitHub Codespaces (serveur permanent, mis à jour tout seul)
 
-Le dépôt contient un `.devcontainer` : ouvrez-le dans un Codespace, `npm install` puis
-`npm start` se lancent tout seuls et le port 8080 est redirigé. Cliquez sur le lien proposé
-(ou l'onglet **PORTS**) et le jeu s'ouvre.
+Ouvrez le dépôt dans un Codespace : **il n'y a rien à taper**. Le `.devcontainer` fait tout :
 
-Un seul réglage à connaître : par défaut GitHub rend le port **privé**, et vos amis
-tomberaient sur une page de connexion. Dans l'onglet **PORTS**, clic droit sur le port 8080 →
-**Port Visibility** → **Public**. L'adresse `https://…-8080.app.github.dev` devient alors
-partageable telle quelle, et le lien d'invitation du salon fonctionne directement.
+1. `npm install` à la création ;
+2. le serveur démarre à chaque démarrage du Codespace ;
+3. le port 8080 est redirigé et rendu **public** — l'adresse
+   `https://<codespace>-8080.app.github.dev` se partage telle quelle ;
+4. un superviseur interroge GitHub **toutes les 30 secondes** : dès qu'un commit arrive sur
+   la branche suivie, il le récupère, relance `npm install` si les dépendances ont changé,
+   et redémarre le serveur.
+
+Vous poussez un commit depuis votre machine, et une demi-minute plus tard la partie tourne
+avec le nouveau code, sans toucher au Codespace.
+
+Le journal du superviseur est dans `/tmp/koroyale.log` :
+
+```bash
+tail -f /tmp/koroyale.log
+```
+
+Le superviseur relance aussi le serveur s'il tombe (attente progressive : 2 s, 4 s, 8 s…),
+et **refuse de se mettre à jour** si vous avez des modifications non commitées sur des
+fichiers suivis — votre travail en cours n'est jamais écrasé. Les fichiers non suivis, eux,
+ne bloquent rien.
+
+Pour le piloter à la main :
+
+```bash
+npm run serve:watch      # le superviseur complet (ce que lance le Codespace)
+npm start                # juste le serveur, sans mise à jour automatique
+```
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `KOROYALE_POLL_MS` | `30000` | Intervalle de scrutation de GitHub |
+| `KOROYALE_BRANCH` | branche courante | Branche suivie |
+| `KOROYALE_NO_PULL` | — | `1` désactive la mise à jour automatique |
+| `KOROYALE_NO_PORT` | — | `1` ne touche pas à la visibilité du port |
+
+Si votre organisation interdit les ports publics, le port reste privé : onglet **PORTS** →
+clic droit sur 8080 → **Port Visibility** → **Public**.
 
 Le Codespace ne fait tourner que le *serveur* : le rendu 3D se fait dans le navigateur de
 chaque joueur, donc les performances dépendent de leur machine, pas du Codespace. Bonus :

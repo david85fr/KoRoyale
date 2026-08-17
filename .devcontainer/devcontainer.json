@@ -1,14 +1,22 @@
 {
   // Configuration GitHub Codespaces / Dev Containers pour KoRoyale.
-  // Ouvrez le dépôt dans un Codespace : les dépendances s'installent, le serveur se lance,
-  // et le port 8080 est redirigé automatiquement.
+  //
+  // À la création du Codespace : les dépendances s'installent, le serveur démarre tout seul,
+  // le port 8080 est ouvert vers l'extérieur, et un superviseur surveille GitHub toutes les
+  // 30 secondes pour récupérer et redéployer chaque nouveau commit.
   "name": "KoRoyale",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
 
-  "postCreateCommand": "npm install",
-  "postAttachCommand": {
-    "serveur": "npm start"
+  "features": {
+    // gh sert au superviseur pour réaffirmer la visibilité publique du port
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
+
+  "postCreateCommand": "npm install --no-audit --no-fund",
+
+  // postStartCommand est rejoué à chaque démarrage du Codespace (création, réveil, rebuild).
+  // On détache le superviseur : la commande doit rendre la main immédiatement.
+  "postStartCommand": "nohup npm run serve:watch > /tmp/koroyale.log 2>&1 & echo 'KoRoyale lancé — journal : /tmp/koroyale.log'",
 
   "forwardPorts": [8080],
   "portsAttributes": {
@@ -17,15 +25,21 @@
       "onAutoForward": "openPreview",
       // « public » permet à vos amis d'ouvrir le lien sans compte GitHub.
       // Si la politique de votre organisation l'interdit, le port reste privé :
-      // passez-le à la main dans l'onglet PORTS (clic droit > Port Visibility > Public).
+      // onglet PORTS > clic droit sur 8080 > Port Visibility > Public.
       "visibility": "public"
     }
+  },
+
+  "remoteEnv": {
+    "PORT": "8080",
+    "KOROYALE_POLL_MS": "30000"
   },
 
   "customizations": {
     "vscode": {
       "settings": {
-        "editor.formatOnSave": false
+        "editor.formatOnSave": false,
+        "terminal.integrated.defaultProfile.linux": "bash"
       }
     }
   }
