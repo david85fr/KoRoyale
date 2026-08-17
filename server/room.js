@@ -313,7 +313,10 @@ export class Room {
     const now = Date.now();
     let dt = (now - this.lastTickAt) / 1000;
     this.lastTickAt = now;
-    if (dt > 0.5) dt = 0.5; // on ne rattrape pas un gros retard
+    // borne des deux cotes : un recul de l'horloge murale (NTP) mettrait l'accumulateur
+    // en dette et figerait le salon entier jusqu'a ce qu'il repasse a zero.
+    if (!(dt > 0)) dt = 0;
+    else if (dt > 0.5) dt = 0.5; // on ne rattrape pas un gros retard
 
     if (this.state === ROOM_STATE.COUNTDOWN) {
       this.countdown -= dt;

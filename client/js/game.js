@@ -140,7 +140,11 @@ export class Game {
 
   start() {
     this.running = true;
-    this.lastFrame = performance.now();
+    // Pas de performance.now() ici : requestAnimationFrame donne l'horodatage de l'image
+    // DEJA en cours, qui peut dater d'avant la construction du monde. La premiere image
+    // se contente donc d'un dt nul et amorce l'horloge elle-meme.
+    this.lastFrame = 0;
+    this.accumulator = 0;
     this.loop = this.loop.bind(this);
     requestAnimationFrame(this.loop);
   }
@@ -484,7 +488,11 @@ export class Game {
   loop(now) {
     if (!this.running) return;
     requestAnimationFrame(this.loop);
-    const dt = Math.min(0.1, (now - this.lastFrame) / 1000);
+    // dt borne des DEUX cotes : un ecart negatif (horodatage d'image anterieur au
+    // demarrage, changement d'horloge) mettrait l'accumulateur en dette et figerait
+    // la simulation jusqu'a ce qu'il repasse a zero.
+    const raw = (now - this.lastFrame) / 1000;
+    const dt = this.lastFrame && Number.isFinite(raw) ? clamp(raw, 0, 0.1) : 0;
     this.lastFrame = now;
 
     this._fpsAcc += dt; this._fpsFrames++;
@@ -511,6 +519,10 @@ export class Game {
 
   fixedUpdate(dt, frame) {
     this.accumulator += dt;
+    // On ne traine jamais plus de retard qu'on ne peut rattraper : au-dela, on laisse
+    // tomber le surplus plutot que de rejouer un paquet de pas a chaque image.
+    if (!(this.accumulator >= 0)) this.accumulator = 0;          // couvre aussi NaN
+    else if (this.accumulator > TICK_DT * 8) this.accumulator = TICK_DT * 4;
     let steps = 0;
     while (this.accumulator >= TICK_DT && steps < 4) {
       this.accumulator -= TICK_DT;
@@ -520,7 +532,8 @@ export class Game {
   }
 
   tickLocal(frame) {
-    if (!this.local || !this.latest) return;
+    if (!this.local) return;
+    if (!this.latest) return;
     const me = this.latest.me;
     const cmd = {
       moveX: frame.moveX, moveY: frame.moveY,
@@ -533,7 +546,8 @@ export class Game {
     const myPs = this.latest.ps.find((p) => p.i === this.myId);
     if (myPs?.v) { this.tickVehicle(frame, myPs); this.pending.length = 0; return; }
     this.localVehicle = null;
-    if (me.st === PSTATE.DEAD || gliding) { this.pending.length = 0; return; }
+    if (me.st === PSTATE.DEAD) { this.pending.length = 0; return; }
+    if (gliding) { this.pending.length = 0; return; }
 
     this.pending.push({ seq, cmd: { ...cmd } });
     while (this.pending.length > 60) this.pending.shift();

@@ -96,9 +96,17 @@ test('lancement de la partie : le monde 3D se construit et tourne', async () => 
       renderCalls: g.renderer.info.render.calls,
       triangles: g.renderer.info.render.triangles,
       ping: Math.round(g.net.latency),
+      // garde-fou : l'accumulateur du pas fixe doit rester positif. S'il part en dette
+      // (horodatage d'image anterieur au demarrage), plus aucune entree n'est envoyee
+      // et la chevre reste figee tout le reste de la partie.
+      accumulator: g.accumulator,
+      inputSeq: g.net.inputSeq,
     };
   });
   console.log('    ', JSON.stringify(stats));
+  assert.ok(stats.accumulator >= 0 && stats.accumulator < 1,
+    `l accumulateur du pas fixe doit rester sain (${stats.accumulator})`);
+  assert.ok(stats.inputSeq > 0, 'le client doit envoyer ses entrees au serveur');
   assert.ok(stats.players >= 1, 'au moins notre chevre doit etre rendue');
   assert.ok(stats.hasWorld, 'le monde doit etre construit');
   assert.ok(stats.triangles > 1000, `le rendu doit produire de la geometrie (${stats.triangles})`);
@@ -123,20 +131,28 @@ test('le joueur saute, atterrit et se deplace', async () => {
 
   await page.screenshot({ path: path.join(SHOTS, '4-au-sol.png') });
 
-  // marcher : on presse Z (avant) pendant 1,5 s
-  const before = await page.evaluate(() => ({ x: window.KoRoyale.game.local.x, z: window.KoRoyale.game.local.z }));
-  await page.evaluate(() => {
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true }));
-    document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true }));
-  });
-  await page.waitForTimeout(1600);
-  await page.evaluate(() => {
-    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW', bubbles: true }));
-    document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW', bubbles: true }));
-  });
-  const after = await page.evaluate(() => ({ x: window.KoRoyale.game.local.x, z: window.KoRoyale.game.local.z }));
-  const moved = Math.hypot(after.x - before.x, after.z - before.z);
-  console.log(`     déplacement clavier : ${moved.toFixed(2)} m`);
+  // Marcher : on presse Z/W (avant). On atterrit parfois nez contre un mur — un joueur
+  // tournerait simplement, donc le test essaie jusqu'à trois caps avant de conclure.
+  let moved = 0;
+  for (let attempt = 0; attempt < 3 && moved <= 1.5; attempt++) {
+    if (attempt > 0) {
+      await page.evaluate((a) => window.KoRoyale.input.setYawPitch(a * 2.1, 0), attempt);
+      await page.waitForTimeout(200);
+    }
+    const before = await page.evaluate(() => ({ x: window.KoRoyale.game.local.x, z: window.KoRoyale.game.local.z }));
+    await page.evaluate(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW', bubbles: true }));
+    });
+    await page.waitForTimeout(1400);
+    await page.evaluate(() => {
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW', bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW', bubbles: true }));
+    });
+    const after = await page.evaluate(() => ({ x: window.KoRoyale.game.local.x, z: window.KoRoyale.game.local.z }));
+    moved = Math.hypot(after.x - before.x, after.z - before.z);
+    console.log(`     déplacement clavier (cap ${attempt + 1}) : ${moved.toFixed(2)} m`);
+  }
   assert.ok(moved > 1.5, `le joueur doit avancer au clavier (${moved.toFixed(2)} m)`);
 
   await page.screenshot({ path: path.join(SHOTS, '5-en-jeu.png') });
